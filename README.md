@@ -46,10 +46,11 @@ Graphs are downloaded to the box running **hubot-grafana** and then uploaded to 
 | `HUBOT_GRAFANA_S3_BUCKET`            | **Yes**  | Name of the S3 bucket to copy the graph into |
 | `HUBOT_GRAFANA_S3_ACCESS_KEY_ID`     | **Yes**  | Access key ID for S3 |
 | `HUBOT_GRAFANA_S3_SECRET_ACCESS_KEY` | **Yes**  | Secret access key for S3 |
-| `HUBOT_GRAFANA_S3_PREFIX`            | No       | Bucket prefix (useful for shared buckets) |
+| `HUBOT_GRAFANA_S3_VERSION`           | No       | Signature Version Signing Process to use (defaults to 'v4') |
 | `HUBOT_GRAFANA_S3_REGION`            | No       | Bucket region (defaults to us-standard) |
 | `HUBOT_GRAFANA_S3_ENDPOINT`          | No       | Endpoint of the S3 API (useful for S3 compatible API, defaults to s3.amazonaws.com) |
 | `HUBOT_GRAFANA_S3_PORT`              | No       | Port of the S3 endpoint
+| `HUBOT_GRAFANA_S3_SSL`               | No       | Enable SSL communication with the S3 endpoint (defaults to 'true')
 | `HUBOT_GRAFANA_S3_STYLE`             | No       | Bucket style of the S3 endpoint 'virtualHosted' or 'path' defaults to 'virtualHosted' |
 
 

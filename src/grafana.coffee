@@ -22,7 +22,7 @@
 #   HUBOT_GRAFANA_S3_REGION - Optional; Bucket region (defaults to us-standard)
 #
 # Dependencies:
-#   "knox": "^0.9.2"
+#   "knox": "^2.6.9"
 #   "request": "~2"
 #
 # Commands:
@@ -31,8 +31,9 @@
 #   hubot graf search <keyword> - Search available dashboards by <keyword>
 #
 
+aws     = require 'aws-sdk'
 crypto  = require 'crypto'
-knox    = require 'knox'
+https   = require 'https'
 request = require 'request'
 
 module.exports = (robot) ->
@@ -47,6 +48,8 @@ module.exports = (robot) ->
   s3_prefix = process.env.HUBOT_GRAFANA_S3_PREFIX
   s3_style = process.env.HUBOT_GRAFANA_S3_STYLE if process.env.HUBOT_GRAFANA_S3_STYLE
   s3_region = process.env.HUBOT_GRAFANA_S3_REGION or 'us-standard'
+  s3_ssl = process.env.HUBOT_GRAFANA_S3_SSL or 'true'
+  s3_version = process.env.HUBOT_GRAFANA_S3_VERSION or 'v4'
   s3_port = process.env.HUBOT_GRAFANA_S3_PORT if process.env.HUBOT_GRAFANA_S3_PORT
 
   # Get a specific dashboard with options
@@ -250,8 +253,7 @@ module.exports = (robot) ->
 
   # Pick a random filename
   uploadPath = () ->
-    prefix = s3_prefix || 'grafana'
-    "#{prefix}/#{crypto.randomBytes(20).toString('hex')}.png"
+    "#{crypto.randomBytes(20).toString('hex')}.png"
 
   # Fetch an image from provided URL, upload it to S3, returning the resulting URL
   fetchAndUpload = (msg, title, url, link) ->
@@ -270,39 +272,48 @@ module.exports = (robot) ->
 
   # Upload image to S3
   uploadToS3 = (msg, title, link, content, length, content_type) ->
-    client = knox.createClient {
-        key      : s3_access_key
-        secret   : s3_secret_key,
-        bucket   : s3_bucket,
-        region   : s3_region,
-        endpoint : s3_endpoint,
-        port     : s3_port,
-        style    : s3_style,
-      }
+    # Copy the endpoint
+    endpoint = s3_endpoint
 
-
-    headers = {
-      'Content-Length' : length,
-      'Content-Type'   : content_type,
-      'x-amz-acl'      : 'public-read',
-      'encoding'       : null
+    # Update the AWS configuration with the
+    # credentials and settings of the S3 server
+    aws.config.update {
+      accessKeyId       : s3_access_key,
+      secretAccessKey   : s3_secret_key,
+      httpOptions       : { proxy: endpoint }
+      region            : s3_region,
+      signatureVersion  : s3_version,
+      sslEnabled        : false
     }
 
-    filename = uploadPath()
+    # Configure SSL if enabled
+    if s3_ssl == 'true'
+      aws.config.update {
+        httpOptions: {
+          agent: https.globalAgent
+        },
+        sslEnabled: true
+      }
 
-    if s3_port
-      image_url = client.http(filename)
-    else
-      image_url = client.https(filename)
+    # Configure S3 endpoint path style
+    if s3_style == 'path'
+      aws.config.update {
+        s3ForcePathStyle: true
+      }
 
-    req = client.put(filename, headers)
+    if !isNaN(s3_port)
+      port = +s3_port
+      endpoint = endpoint.concat(":#{port}")
 
-    req.on 'response', (res) ->
+    # Initialize the S3 client
+    aws_endpoint = new aws.Endpoint(endpoint);
+    client = new aws.S3({ endpoint: aws_endpoint });
 
-      if (200 == res.statusCode)
-        sendRobotResponse msg, title, image_url, link
-      else
-        robot.logger.debug res
-        robot.logger.error "Upload Error Code: #{res.statusCode}"
+    # Upload the render
+    client.upload { Body: content, Bucket: s3_bucket, Key: uploadPath() }, (err, res) ->
+      if (err)
+        robot.logger.debug err
+        robot.logger.error "Upload Error Code: #{err.code}"
         msg.send "#{title} - [Upload Error] - #{link}"
-    req.end(content);
+      else
+        sendRobotResponse msg, title, res.Location, link
